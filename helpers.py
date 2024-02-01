@@ -470,6 +470,7 @@ def tradeclass(i,df,j=None):
              else:
                  df.at[i, 'trade_class'] = 0 
 
+
 def setup_response_function_data(df):
     """ Setup the data for the response function analysis. 
     If not found,Compute the mid-price, previous mid-price,pervious trade price and the trade class.
@@ -481,6 +482,7 @@ def setup_response_function_data(df):
     # Compute the mid price
     if 'mid_price' not in df.columns: df['mid_price'] = (df['ask-price'] + df['bid-price']) / 2
     df.reset_index(inplace=True)
+    
     if 'trade_class' not in df.columns: 
         df['trade_class'] = np.nan
         for i in range(len(df)):
@@ -489,7 +491,11 @@ def setup_response_function_data(df):
     df.dropna(subset=["trade_class"] , inplace=True)
 
     # Set the index to be the timestamp
-    if type(df.index) != pd.DatetimeIndex: df.set_index('index',inplace=True)
+    if type(df.index) != pd.DatetimeIndex: 
+        if 'index' in df.columns :
+            df.set_index('index',inplace=True)
+        else:
+            df.set_index('ny_index',inplace=True)
     # Convert the index to New York timezone
     if str(df.index.tzinfo) != 'America/New_York':
         ny_index = pd.DatetimeIndex(df['index']) if 'index' in df.columns else pd.DatetimeIndex(df.index)
@@ -497,6 +503,7 @@ def setup_response_function_data(df):
         df.loc[:, 'index'] = ny_index
         df.set_index('index',inplace=True)
     return df
+
 
 
 def compute_response(df, tau_max=100):
