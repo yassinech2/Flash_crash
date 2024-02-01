@@ -14,9 +14,8 @@ import pandas as pd
 import numpy as np
 
 from multiprocessing import Pool
-
-
-
+import scipy.signal
+import statsmodels.api as sm
 dask.config.set(scheduler="processes")
 
 @dask.delayed
@@ -393,56 +392,9 @@ def classify_trade(row):
             return -1
         
 
-# def setup_data(df,resample='1s'):
-#     """ Setup the data for the response function analysis."""
-#     if not isinstance(df, pd.DataFrame): df = df.to_pandas_df()
-#     assert set( ['trade_price', 'trade_volume', 'bid-price', 'bid-volume', 'ask-price', 'ask-volume'] ).issubset(set(df.columns.tolist()))
-#     if type(df.index) != pd.DatetimeIndex: df.set_index('index',inplace=True)
-#     # Convert the index to New York timezone
-#     if str(df.index.tzinfo) != 'America/New_York':
-#         ny_index = pd.DatetimeIndex(df['index']) if 'index' in df.columns else pd.DatetimeIndex(df.index)
-#         ny_index = ny_index.tz_localize('UTC').tz_convert('America/New_York')
-#         df.loc[:, 'index'] = ny_index
-#         df.set_index('index',inplace=True)
-#     # Fill the missing values and resample the data to 1s
-#     df.loc[:, ['bid-price','ask-price']] = df[['bid-price','ask-price']].ffill()
-#     # df = df.resample(resample).agg({'trade_price': np.nanmean, 'trade_volume': np.nansum, 'bid-price': np.nanmean, 'ask-price':np.nanmean, 'ask-volume': np.nansum}).dropna()
-#     # Compute the mid price
-#     if 'mid_price' not in df.columns: df['mid_price'] = (df['ask-price'] + df['bid-price']) / 2
-#     if 'prev_mid_price' not in df.columns:  df.loc[:,'prev_mid_price']  = df['mid_price'].shift(1)
-#     if 'prev_trade' not in df.columns: df.loc[:,'prev_trade']= df['trade_price'].shift(1)
-#     if 'trade_class' not in df.columns: 
-#         df['trade_class'] = np.nan
-#         df['trade_class'] = df.apply(classify_trade, axis=1)
-#     return df
-
-# def setup_response_function_data(df):
-#     """ Setup the data for the response function analysis. 
-#     If not found,Compute the mid-price, previous mid-price,pervious trade price and the trade class.
-#     """
-#     if not isinstance(df, pd.DataFrame): df = df.to_pandas_df()
-#     assert set( ['trade_price', 'trade_volume', 'bid-price', 'bid-volume', 'ask-price', 'ask-volume'] ).issubset(set(df.columns.tolist()))
-#     if type(df.index) != pd.DatetimeIndex: df.set_index('index',inplace=True)
-#     # Convert the index to New York timezone
-#     if str(df.index.tzinfo) != 'America/New_York':
-#         ny_index = pd.DatetimeIndex(df['index']) if 'index' in df.columns else pd.DatetimeIndex(df.index)
-#         ny_index = ny_index.tz_localize('UTC').tz_convert('America/New_York')
-#         df.loc[:, 'index'] = ny_index
-#         df.set_index('index',inplace=True)
-#     # Fill the missing values in the bid and ask price 
-#     df.loc[:, ['bid-price','ask-price']] = df[['bid-price','ask-price']].ffill()
-
-#     # Compute the mid price
-#     if 'mid_price' not in df.columns: df['mid_price'] = (df['ask-price'] + df['bid-price']) / 2
-#     if 'prev_mid_price' not in df.columns:  df.loc[:,'prev_mid_price']  = df['mid_price'].shift(1)
-#     if 'prev_trade' not in df.columns: df.loc[:,'prev_trade']= df['trade_price'].shift(1)
-#     if 'trade_class' not in df.columns: 
-#         df['trade_class'] = np.nan
-#         df['trade_class'] = df.apply(classify_trade, axis=1)
-#     df.dropna(inplace=True)
-#     return df
                  
 def tradeclass(i,df,j=None):
+    """ Compute the trade class for each trade. Classify each trade as a buyer-initiated trade, a seller-initiated trade, or a non-informative trade. Check the previous trade price and the previous mid-price."""
     if j == None:
         if df.at[i, 'trade_price'] > df.at[i, 'mid_price']:
                 df.at[i, 'trade_class'] = 1
@@ -507,6 +459,7 @@ def setup_response_function_data(df):
 
 
 def compute_response(df, tau_max=100):
+    """ Compute the average response function R(tau) for a given tau."""
     R = []
     R_std = []
     for tau in range(1, tau_max):
@@ -536,7 +489,7 @@ def plot_response_function(df, tau_max =1000, ticker = "",confidence_interval=Fa
     plot_response(R,ticker_name=ticker,confidence_interval=confidence_interval)
 
 
-import statsmodels.api as sm
+
 
 def plot_3day_response_functions(df, tau_max=1000, ticker="", start_date='2010-05-05'):
     end_date = pd.to_datetime(start_date) + pd.DateOffset(days=3)
@@ -673,6 +626,7 @@ def plot_3day_response_functions_15min(df, tau_max=1000, ticker="", start_date='
     fig.show()
 
 def compute_response_volume(df, tau=1):
+    """ Compute the response function R(V,tau) for a given tau as a function of the volume V."""
     R = []
     df.dropna(subset=['trade_volume'], inplace=True)
     df.dropna(subset=['mid_price'], inplace=True)
@@ -689,11 +643,13 @@ def compute_response_volume(df, tau=1):
     return R
 
 def compute_response_tau(tau, df):
+    """ Compute the response function R(tau) for a given tau."""
     mid_price_tau = df['mid_price'].shift(-tau)
     r_values = df['trade_class'] * ((mid_price_tau - df['mid_price']))
     return tau, r_values.mean(), r_values.std()
 
 def compute_response_parallel(df, tau_max=100, num_processes=4):
+    """ Compute the average response function R(tau) in parallel using multiple processes."""
     tau_values = range(1, tau_max)
     pool = Pool(processes=num_processes)
     results = pool.starmap(compute_response_tau, [(tau, df) for tau in tau_values])
@@ -706,10 +662,8 @@ def compute_response_parallel(df, tau_max=100, num_processes=4):
 
 
 
-
-import scipy.signal
-
 def compute_response_c(data, tau=100):
+    """ Computes the response function R(tau) for a given tau using the convolution method."""
     data = data.dropna()
     N = len(data["mid_price"])
     tau_max = tau
@@ -734,12 +688,14 @@ def check_flash_crash(deviation,threshold):
         return True
     else:
         return False
+    
 def update_metrics(metrics,flash_crash,true_label):
     if flash_crash and true_label : metrics["TP"] += 1
     elif flash_crash and not true_label : metrics["FP"] += 1
     elif not flash_crash and true_label : metrics["FN"] += 1
     elif not flash_crash and not true_label : metrics["TN"] += 1
     return metrics
+
 def f1_score(metrics):
     if (metrics["TP"]+metrics["FP"] == 0) or (metrics["TP"]+metrics["FN"] == 0) : return 1
     precision = metrics["TP"]/(metrics["TP"]+metrics["FP"])
