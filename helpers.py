@@ -360,7 +360,7 @@ def plotYvsX(x,y ,xlabel,ylabel,title,saving_dir) :
     -------
     None"""
 
-    plt.figure(figsize=(20, 6))
+    # plt.figure(figsize=(20, 6))
     plt.plot(x, y)
     plt.xlabel(xlabel, fontsize=16)
     plt.ylabel(ylabel, fontsize=16)
@@ -392,46 +392,123 @@ def classify_trade(row):
         else :
             return -1
         
+
+# def setup_data(df,resample='1s'):
+#     """ Setup the data for the response function analysis."""
+#     if not isinstance(df, pd.DataFrame): df = df.to_pandas_df()
+#     assert set( ['trade_price', 'trade_volume', 'bid-price', 'bid-volume', 'ask-price', 'ask-volume'] ).issubset(set(df.columns.tolist()))
+#     if type(df.index) != pd.DatetimeIndex: df.set_index('index',inplace=True)
+#     # Convert the index to New York timezone
+#     if str(df.index.tzinfo) != 'America/New_York':
+#         ny_index = pd.DatetimeIndex(df['index']) if 'index' in df.columns else pd.DatetimeIndex(df.index)
+#         ny_index = ny_index.tz_localize('UTC').tz_convert('America/New_York')
+#         df.loc[:, 'index'] = ny_index
+#         df.set_index('index',inplace=True)
+#     # Fill the missing values and resample the data to 1s
+#     df.loc[:, ['bid-price','ask-price']] = df[['bid-price','ask-price']].ffill()
+#     # df = df.resample(resample).agg({'trade_price': np.nanmean, 'trade_volume': np.nansum, 'bid-price': np.nanmean, 'ask-price':np.nanmean, 'ask-volume': np.nansum}).dropna()
+#     # Compute the mid price
+#     if 'mid_price' not in df.columns: df['mid_price'] = (df['ask-price'] + df['bid-price']) / 2
+#     if 'prev_mid_price' not in df.columns:  df.loc[:,'prev_mid_price']  = df['mid_price'].shift(1)
+#     if 'prev_trade' not in df.columns: df.loc[:,'prev_trade']= df['trade_price'].shift(1)
+#     if 'trade_class' not in df.columns: 
+#         df['trade_class'] = np.nan
+#         df['trade_class'] = df.apply(classify_trade, axis=1)
+#     return df
+
+# def setup_response_function_data(df):
+#     """ Setup the data for the response function analysis. 
+#     If not found,Compute the mid-price, previous mid-price,pervious trade price and the trade class.
+#     """
+#     if not isinstance(df, pd.DataFrame): df = df.to_pandas_df()
+#     assert set( ['trade_price', 'trade_volume', 'bid-price', 'bid-volume', 'ask-price', 'ask-volume'] ).issubset(set(df.columns.tolist()))
+#     if type(df.index) != pd.DatetimeIndex: df.set_index('index',inplace=True)
+#     # Convert the index to New York timezone
+#     if str(df.index.tzinfo) != 'America/New_York':
+#         ny_index = pd.DatetimeIndex(df['index']) if 'index' in df.columns else pd.DatetimeIndex(df.index)
+#         ny_index = ny_index.tz_localize('UTC').tz_convert('America/New_York')
+#         df.loc[:, 'index'] = ny_index
+#         df.set_index('index',inplace=True)
+#     # Fill the missing values in the bid and ask price 
+#     df.loc[:, ['bid-price','ask-price']] = df[['bid-price','ask-price']].ffill()
+
+#     # Compute the mid price
+#     if 'mid_price' not in df.columns: df['mid_price'] = (df['ask-price'] + df['bid-price']) / 2
+#     if 'prev_mid_price' not in df.columns:  df.loc[:,'prev_mid_price']  = df['mid_price'].shift(1)
+#     if 'prev_trade' not in df.columns: df.loc[:,'prev_trade']= df['trade_price'].shift(1)
+#     if 'trade_class' not in df.columns: 
+#         df['trade_class'] = np.nan
+#         df['trade_class'] = df.apply(classify_trade, axis=1)
+#     df.dropna(inplace=True)
+#     return df
+                 
+def tradeclass(i,df,j=None):
+    if j == None:
+        if df.at[i, 'trade_price'] > df.at[i, 'mid_price']:
+                df.at[i, 'trade_class'] = 1
+        elif df.at[i, 'trade_price'] < df.at[i, 'mid_price']:
+                df.at[i, 'trade_class'] = -1
+        else:
+            j = i - 1
+            while j >= 0 and pd.isna(df.at[j, 'trade_price']):
+                j -= 1
+            if j >= 0:
+                return tradeclass(i,df,j)
+            else:
+                df.at[i, 'trade_class'] = 0
+    else:
+         if df.at[j, 'trade_price'] > df.at[i, 'trade_price']:
+             df.at[i, 'trade_class'] = -1
+         elif df.at[j, 'trade_price'] < df.at[i, 'trade_price']:
+             df.at[i, 'trade_class'] = 1
+         else:
+             k = j - 1
+             while k >= 0 and pd.isna(df.at[k, 'trade_price']):
+                 k -= 1
+             if k >= 0:
+                 return(tradeclass(i,df,k))
+             else:
+                 df.at[i, 'trade_class'] = 0 
+
 def setup_response_function_data(df):
     """ Setup the data for the response function analysis. 
     If not found,Compute the mid-price, previous mid-price,pervious trade price and the trade class.
     """
-    assert 'index' in df.columns, "The index column is missing"
-    assert 'ask-price' in df.columns, "The ask-price column is missing"
-    assert 'bid-price' in df.columns, "The bid-price column is missing"
-    assert 'trade_price' in df.columns, "The trade_price column is missing"
     if not isinstance(df, pd.DataFrame): df = df.to_pandas_df()
-    # Convert the index to New York timezone
-    ny_index = pd.DatetimeIndex(df['index']) 
-    ny_index = ny_index.tz_localize('UTC').tz_convert('America/New_York')
-    # df['index'] = ny_index 
-    df.loc[:, 'index'] = ny_index
-
-    df.set_index('index',inplace=True)
+    assert set( ['trade_price', 'trade_volume', 'bid-price', 'bid-volume', 'ask-price', 'ask-volume'] ).issubset(set(df.columns.tolist()))
     # Fill the missing values in the bid and ask price 
     df.loc[:, ['bid-price','ask-price']] = df[['bid-price','ask-price']].ffill()
     # Compute the mid price
     if 'mid_price' not in df.columns: df['mid_price'] = (df['ask-price'] + df['bid-price']) / 2
-    if 'prev_mid_price' not in df.columns:  df.loc[:,'prev_mid_price']  = df['mid_price'].shift(1)
-    if 'prev_trade' not in df.columns: df.loc[:,'prev_trade']= df['trade_price'].shift(1)
+    df.reset_index(inplace=True)
     if 'trade_class' not in df.columns: 
         df['trade_class'] = np.nan
-        # Apply the function to each row
-        df['trade_class'] = df.apply(classify_trade, axis=1)
+        for i in range(len(df)):
+            if not pd.isna(df.at[i, 'trade_price']):
+                tradeclass(i,df) 
+    df.dropna(subset=["trade_class"] , inplace=True)
+
+    # Set the index to be the timestamp
+    if type(df.index) != pd.DatetimeIndex: df.set_index('index',inplace=True)
+    # Convert the index to New York timezone
+    if str(df.index.tzinfo) != 'America/New_York':
+        ny_index = pd.DatetimeIndex(df['index']) if 'index' in df.columns else pd.DatetimeIndex(df.index)
+        ny_index = ny_index.tz_localize('UTC').tz_convert('America/New_York')
+        df.loc[:, 'index'] = ny_index
+        df.set_index('index',inplace=True)
     return df
+
 
 def compute_response(df, tau_max=100):
     R = []
     R_std = []
     for tau in range(1, tau_max):
-        # Now, compute the mid-price at time t + tau
         mid_price_tau = df['mid_price'].shift(-tau)
-        # Compute the weighted price difference for each trade
         r_values = df['trade_class'] * ((mid_price_tau - df['mid_price']))
-        # Compute the average response function R(tau)
-        R.append(r_values.mean())
-        R_std.append(r_values.std())
+        R.append(np.nanmean(r_values))
+        R_std.append(np.nanstd(r_values))
     return R,R_std
+
 
 def plot_response(R,ticker_name='',confidence_interval=False):
     R, R_std = R
@@ -447,30 +524,38 @@ def plot_response(R,ticker_name='',confidence_interval=False):
 
 
 def plot_response_function(df, tau_max =1000, ticker = "",confidence_interval=False):
-    # Define tau, for example, 5 minutes if your timestamps are in seconds
     df = setup_response_function_data(df)
-    # Compute the average response function R(tau)
-    R = compute_response(df, tau_max)
+    R = compute_response_parallel(df, tau_max)
     plot_response(R,ticker_name=ticker,confidence_interval=confidence_interval)
 
-def plot_3day_response_functions(df, tau_max =1000, ticker = "",start_date='2010-05-05'):
+
+import statsmodels.api as sm
+
+def plot_3day_response_functions(df, tau_max=1000, ticker="", start_date='2010-05-05'):
     end_date = pd.to_datetime(start_date) + pd.DateOffset(days=3)
     end_date = end_date.strftime('%Y-%m-%d')
     df_filtered = df.copy()
-    # df_filtered = df_filtered[(df_filtered['index'] >= start_date) & (df_filtered['index'] <= end_date)]
     df_filtered = df_filtered[(df_filtered.index >= start_date) & (df_filtered.index <= end_date)]
     df_filtered = setup_response_function_data(df_filtered)
-    _,ax = plt.subplots(1, 3, figsize=(20, 6))
+    _, ax = plt.subplots(1, 3, figsize=(20, 6))
     for i in range(3):
         start = pd.to_datetime(start_date) + pd.DateOffset(days=i)
         end = pd.to_datetime(start) + pd.DateOffset(days=1)
         start = start.strftime('%Y-%m-%d')
         end = end.strftime('%Y-%m-%d')
         df_day = df_filtered.copy()
-        # df_day = df_day[(df_day['index'] >= start) & (df_day['index'] <= end)]
         df_day = df_day[(df_day.index >= start) & (df_day.index <= end)]
-        R,R_std = compute_response(df_day, tau_max)
+        R = compute_response_c(df_day, tau_max)
+
+        # Fit OLS/linear regression on R
+        X = np.arange(len(R)).reshape(-1, 1)
+        X = sm.add_constant(X)
+        model = sm.OLS(R, X)
+        results = model.fit()
+        predictions = results.predict(X)
+
         ax[i].plot(R)
+        ax[i].plot(predictions, linestyle='--', color='red')
         ax[i].set_xlabel('Tau')
         ax[i].set_ylabel('R(tau)')
         ax[i].set_title(ticker + ' Average Response Function' + f' {start}')
@@ -482,7 +567,6 @@ def plot_3day_response_functions_split(df, tau_max =1000, ticker = "",start_date
     end_date = pd.to_datetime(start_date) + pd.DateOffset(days=3)
     end_date = end_date.strftime('%Y-%m-%d')
     df_filtered = df.copy()
-    # df_filtered = df_filtered[(df_filtered['index'] >= start_date) & (df_filtered['index'] <= end_date)]
     df_filtered = df_filtered[(df_filtered.index >= start_date) & (df_filtered.index <= end_date)]
     df_filtered = setup_response_function_data(df_filtered)
     fig,ax = plt.subplots(1, 3, figsize=(22, 8))
@@ -499,7 +583,7 @@ def plot_3day_response_functions_split(df, tau_max =1000, ticker = "",start_date
         for trade_class in df_day['trade_class'].unique():
             df_hour = df_day[df_day['trade_class'] == trade_class]
             df_hour_clean = df_hour.dropna(subset=['trade_class'])
-            R = compute_response(df_hour_clean, tau_max)
+            R = compute_response_c(df_hour_clean, tau_max)
             ax[i].plot(R, label=f'Trade Class {trade_class}')
         ax[i].legend()
         ax[i].set_xlabel('Tau')
@@ -533,7 +617,7 @@ def plot_3day_response_functions_hourly(df, tau_max =1000, ticker = "",start_dat
             df_hour = df_day[df_day['hour'] == hour]
             df_hour_clean = df_hour.dropna(subset=['trade_class'])
             # Compute the average response function R(tau)
-            R ,R_std = compute_response(df_hour_clean, tau_max)
+            R  = compute_response_c(df_hour_clean, tau_max)
             ax[i].plot(R, label=f'Hour {hour}')
         ax[i].legend()
         ax[i].set_xlabel('Tau')
@@ -543,39 +627,7 @@ def plot_3day_response_functions_hourly(df, tau_max =1000, ticker = "",start_dat
     plt.tight_layout()
     plt.show()
 
-# def plot_3day_response_functions_15min(df, tau_max=1000, ticker="", start_date='2010-05-05'):
-#     end_date = pd.to_datetime(start_date) + pd.DateOffset(days=3)
-#     end_date = end_date.strftime('%Y-%m-%d')
-#     df_filtered = df.copy()
-#     df_filtered = df_filtered[(df_filtered.index >= start_date) & (df_filtered.index <= end_date)]
-    
-#     df_filtered = setup_response_function_data(df_filtered)
-#     fig, axs = plt.subplots(3, figsize=(22, 18))  # Changed to vertical subplots for clarity
-    
-#     for i in range(3):
-#         start = pd.to_datetime(start_date).tz_localize('America/New_York') + pd.DateOffset(days=i)
-#         end = start + pd.DateOffset(days=1)
-#         df_day = df_filtered[(df_filtered.index >= start) & (df_filtered.index < end)]  # Use '< end' to not include the end
-        
-#         # Group the DataFrame by 15-minute intervals
-#         df_day_grouped = df_day.groupby(pd.Grouper( freq='15T'))
-#         # df_day_grouped = df_day.groupby(pd.Grouper(key='index', freq='15T'))
-        
-#         for name, group in df_day_grouped:
-#             if not group.empty:
-#                 group_clean = group.dropna(subset=['trade_class'])
-#                 # Compute the average response function R(tau) for the group
-#                 R,R_std = compute_response(group_clean, tau_max)
-#                 axs[i].plot(R, label=name.strftime('%H:%M'))  # Label with the start of the 15-min interval
-        
-#         axs[i].legend()
-#         axs[i].set_xlabel('Tau')
-#         axs[i].set_ylabel('R(tau)')
-#         axs[i].set_title(f'{ticker} Response Function {start.date()}')
-#         axs[i].grid()
-    
-#     plt.tight_layout()
-#     plt.show()
+
 
 
 ## using plotly
@@ -633,3 +685,58 @@ def compute_response_tau(tau, df):
     mid_price_tau = df['mid_price'].shift(-tau)
     r_values = df['trade_class'] * ((mid_price_tau - df['mid_price']))
     return tau, r_values.mean(), r_values.std()
+
+def compute_response_parallel(df, tau_max=100, num_processes=4):
+    tau_values = range(1, tau_max)
+    pool = Pool(processes=num_processes)
+    results = pool.starmap(compute_response_tau, [(tau, df) for tau in tau_values])
+    pool.close()
+    pool.join()
+    results.sort(key=lambda x: x[0])  # Sort results by tau
+    R = [x[1] for x in results]
+    R_std = [x[2] for x in results] 
+    return R , R_std
+
+
+
+
+import scipy.signal
+
+def compute_response_c(data, tau=100):
+    data = data.dropna()
+    N = len(data["mid_price"])
+    tau_max = tau
+    tau = N
+    idx =  [ N-i for i in range(1,tau)]
+    sn_pn_tau = scipy.signal.fftconvolve(data['mid_price'],data["trade_class"][::-1],mode='full')[-(tau-1):]
+    sn_pn_convolve = []
+    for i in range(1,tau):
+        truncated_mid_price = data['mid_price'][:tau - i]
+        truncated_trade_class = data['trade_class'][:tau - i]
+        convolution_result = scipy.signal.fftconvolve(truncated_mid_price, truncated_trade_class[::-1], mode='valid')
+        sn_pn_convolve.append(convolution_result[0])
+    R = (sn_pn_tau-sn_pn_convolve)/ idx
+    return R[:tau_max-1]
+
+############################################################################################################################################
+############ Training Helpers #####################################################################################################
+############################################################################################################################################
+
+def check_flash_crash(deviation,threshold):
+    if deviation > threshold:
+        return True
+    else:
+        return False
+def update_metrics(metrics,flash_crash,true_label):
+    if flash_crash and true_label : metrics["TP"] += 1
+    elif flash_crash and not true_label : metrics["FP"] += 1
+    elif not flash_crash and true_label : metrics["FN"] += 1
+    elif not flash_crash and not true_label : metrics["TN"] += 1
+    return metrics
+def f1_score(metrics):
+    if (metrics["TP"]+metrics["FP"] == 0) or (metrics["TP"]+metrics["FN"] == 0) : return 1
+    precision = metrics["TP"]/(metrics["TP"]+metrics["FP"])
+    recall = metrics["TP"]/(metrics["TP"]+metrics["FN"])
+    return 2*(precision*recall)/(precision+recall)
+def accuracy(metrics):
+    return (metrics["TP"]+metrics["TN"])/(metrics["TP"]+metrics["TN"]+metrics["FP"]+metrics["FN"])
